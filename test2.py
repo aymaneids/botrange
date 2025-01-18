@@ -3,6 +3,16 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 import io
 from datetime import datetime
+from flask import Flask
+import os
+import threading
+
+# Initialize Flask app
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
 
 # Store user states
 user_states = {}
@@ -51,7 +61,6 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states[user_id]['data'] = data
         user_states[user_id]['waiting_for'] = 'start_date'
         
-        # Get the range of dates from the data
         min_date = data['time'].min().strftime('%Y-%m-%d')
         max_date = data['time'].max().strftime('%Y-%m-%d')
         
@@ -87,7 +96,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 end_date = pd.to_datetime(text)
             
-            # Perform the analysis
             result = perform_analysis(
                 state['data'],
                 state['analysis_type'],
@@ -95,10 +103,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 end_date
             )
             
-            # Send results
             await update.message.reply_text(result)
-            
-            # Clear user state
             user_states.pop(user_id, None)
             
     except ValueError:
@@ -136,7 +141,6 @@ def perform_analysis(data: pd.DataFrame, analysis_type: str, start_date: datetim
             recent = data.tail(5)[['time', 'daily_range']].to_string()
             result += recent
 
-        # Add some statistics
         result += "\n\nAdditional Statistics:\n"
         result += f"Number of periods analyzed: {len(data)}\n"
         if analysis_type == 'weekly':
@@ -171,8 +175,8 @@ Your CSV file should have columns:
     """
     await update.message.reply_text(help_text)
 
-def main():
-    # Replace 'YOUR_BOT_TOKEN' with your actual bot token from BotFather
+def run_bot():
+    # Replace 'YOUR_BOT_TOKEN' with your actual bot token
     app = Application.builder().token('7220951106:AAGxmixczMtMlnJnfnZgTKCFTLgQYvEnuPo').build()
 
     app.add_handler(CommandHandler('start', start))
@@ -183,6 +187,15 @@ def main():
 
     print("Bot started...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+def main():
+    # Start the bot in a separate thread
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.start()
+    
+    # Run Flask app
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
     main()
